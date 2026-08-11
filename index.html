@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Australian Football Manager</title>
+<style>
+:root{--bg:#09111f;--card:#111c2e;--card2:#17253b;--line:#2a3b59;--txt:#f5f7fb;--muted:#9cafc9;--green:#45d69a;--gold:#ffd36a;--red:#ff7788;--blue:#70a7ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#132643,#09111f 55%);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Arial}
+header{padding:18px 15px 12px;position:sticky;top:0;z-index:5;background:#0b1424ee;backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+h1{font-size:22px;margin:0}.tag{font-size:12px;color:var(--muted);margin-top:3px}
+nav{display:flex;gap:7px;overflow:auto;padding:9px 12px;background:#0c1728;position:sticky;top:80px;z-index:4}
+button,select,input{font:inherit}button{border:1px solid #3a4f70;background:#182844;color:#fff;padding:9px 11px;border-radius:10px;font-weight:800}button.primary{background:#195f49;border-color:#3cc493}button.danger{background:#512532;border-color:#9d485b}
+main{max-width:1100px;margin:auto;padding:14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:linear-gradient(160deg,#142238,#0f1a2b);border:1px solid var(--line);border-radius:15px;padding:14px;box-shadow:0 8px 30px #0003}
+.hero{background:linear-gradient(135deg,#18314a,#16382d)}.muted{color:var(--muted)}.stat{font-size:30px;font-weight:950}
+.actions{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{padding:5px 8px;border-radius:999px;background:#1e304b;color:#cfe0fa;font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:7px;border-bottom:1px solid #293951;text-align:left}th{color:var(--muted)}
+tr:nth-child(1) td{font-weight:900}.up{color:var(--green)}.down{color:var(--red)}.gold{color:var(--gold)}
+.fixture{display:flex;gap:8px;align-items:center;justify-content:space-between;border-bottom:1px solid #293951;padding:9px 0}.score{font-weight:900;white-space:nowrap}
+input.num{width:42px;padding:6px;background:#091322;border:1px solid #405477;color:#fff;border-radius:7px}.hidden{display:none}.bigbtn{font-size:16px;padding:13px 15px}
+.news{padding:9px;border-left:3px solid #4774b5;background:#101d31;margin:6px 0;border-radius:7px;font-size:13px}
+@media(max-width:600px){nav{top:73px}h1{font-size:19px}.grid{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>🇦🇺 Australian Football Manager</h1><div class="tag">Custom pyramid • 2026/27 • Western United included • autosaves on this device</div></header>
+<nav>
+<button onclick="page('home')">🏠</button><button onclick="page('club')">⭐ My Club</button><button onclick="page('table')">📊 Tables</button><button onclick="page('fixtures')">📅 Fixtures</button><button onclick="page('cup')">🏆 Cup</button><button onclick="page('news')">📰 News</button>
+</nav><main id="app"></main>
+<script src="data.js"></script><script>
+const KEY='ausfm_v2';
+let S=JSON.parse(localStorage.getItem(KEY)||'null');
+const all=()=>[...DATA.tier1,...DATA.tier2,...Object.values(DATA.npl).flat()];
+const rnd=(a)=>a[Math.floor(Math.random()*a.length)];
+function rr(teams){let a=[...teams];if(a.length%2)a.push(null);let out=[],n=a.length;for(let r=0;r<n-1;r++){let g=[];for(let i=0;i<n/2;i++){let x=a[i],y=a[n-1-i];if(x&&y)g.push([(r+i)%2?y:x,(r+i)%2?x:y])}out.push(g);a=[a[0],a[n-1],...a.slice(1,n-1)]}return out.concat(out.map(g=>g.map(z=>[z[1],z[0]])))}
+function mk(teams){let t={};teams.forEach(x=>t[x]={team:x,p:0,w:0,d:0,l:0,gf:0,ga:0,pts:0});return {teams,table:t,fix:rr(teams)}}
+function init(){let s={round:1,month:"August",logs:[],selected:"Melbourne City",budget:35,form:{},t1:mk(DATA.tier1),t2:mk(DATA.tier2),npl:{},cup:null,season:1};Object.keys(DATA.npl).forEach(k=>s.npl[k]=mk(DATA.npl[k]));all().forEach(x=>s.form[x]=50+Math.floor(Math.random()*20));return s}
+if(!S)S=init();
+function save(){localStorage.setItem(KEY,JSON.stringify(S))}
+function table(l){return Object.values(l.table).sort((a,b)=>b.pts-a.pts||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf)}
+function strength(t){return S.form[t]||55}
+function pois(l){let L=Math.exp(-l),k=0,p=1;do{k++;p*=Math.random()}while(p>L);return k-1}
+function score(a,b){let sa=strength(a)+3,sb=strength(b),x=Math.min(6,pois(.55+sa/65)),y=Math.min(6,pois(.45+sb/75));return[x,y]}
+function play(l,name,r){(l.fix[r-1]||[]).forEach(([a,b])=>{let[x,y]=score(a,b),A=l.table[a],B=l.table[b];A.p++;B.p++;A.gf+=x;A.ga+=y;B.gf+=y;B.ga+=x;if(x>y){A.w++;B.l++;A.pts+=3;S.form[a]=Math.min(85,S.form[a]+1);S.form[b]=Math.max(40,S.form[b]-1)}else if(y>x){B.w++;A.l++;B.pts+=3;S.form[b]=Math.min(85,S.form[b]+1);S.form[a]=Math.max(40,S.form[a]-1)}else{A.d++;B.d++;A.pts++;B.pts++;S.form[a]=Math.min(85,S.form[a]+.2);S.form[b]=Math.min(85,S.form[b]+.2)}S.logs.unshift(`${name}: ${a} ${x}-${y} ${b}`)})}
+function simulate(){if(S.round>34){alert("Regular season finished. Check Season.");return}play(S.t1,"A-League",S.round);play(S.t2,"Tier 2",S.round);Object.entries(S.npl).forEach(([k,l])=>{if(S.round<=l.fix.length)play(l,"NPL "+k,S.round)});if(S.round%4===0)transferNews();S.round++;S.month=["August","September","October","November","December","January","February","March","April","May","June"][Math.min(10,Math.floor((S.round-1)/4))];save();page('home')}
+function simulate5(){for(let i=0;i<5 && S.round<=34;i++)simulate();page('home')}
+function transferNews(){let a=rnd(all()),b=rnd(all());S.logs.unshift(`TRANSFER: ${a} are monitoring a player from ${b}.`)}
+function reset(){if(confirm("Start a brand-new season?")){S=init();save();page('home')}}
+function home(){let t=table(S.t1),m=t[0];document.getElementById('app').innerHTML=`
+<section class="card hero"><div class="muted">SEASON ${S.season} • ${S.month}</div><h2>Round ${Math.min(S.round,35)-1} / 34</h2>
+<div class="actions"><button class="primary bigbtn" onclick="simulate()">⚡ Simulate Next Round</button><button class="bigbtn" onclick="simulate5()">⏩ Simulate 5 Rounds</button><button class="danger" onclick="reset()">♻️ New Season</button></div>
+<div class="grid"><div><div class="muted">A-League leader</div><div class="stat">${m.team}</div><div>${m.pts} points</div></div><div><div class="muted">My club</div><div class="stat">${S.selected}</div><div>Form ${Math.round(S.form[S.selected])}</div></div><div><div class="muted">Results</div><div class="stat">${S.logs.length}</div><div>saved automatically</div></div></div></section>
+<div class="grid" style="margin-top:12px"><section class="card"><h3>🥇 A-League Top 6</h3>${smallTable(S.t1,6)}</section><section class="card"><h3>🥈 Tier 2 Top 6</h3>${smallTable(S.t2,6)}</section><section class="card"><h3>📰 Latest</h3>${S.logs.slice(0,8).map(x=>`<div class="news">${x}</div>`).join('')||'<div class="muted">Simulate a round to begin.</div>'}</section></div>`}
+function smallTable(l,n=8){return '<table><tr><th>#</th><th>Club</th><th>P</th><th>GD</th><th>Pts</th></tr>'+table(l).slice(0,n).map((x,i)=>`<tr><td>${i+1}</td><td>${x.team}</td><td>${x.p}</td><td>${x.gf-x.ga}</td><td>${x.pts}</td></tr>`).join('')+'</table>'}
+function fullTable(l,title){return `<section class="card"><h3>${title}</h3><table><tr><th>#</th><th>Club</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr>${table(l).map((x,i)=>`<tr><td>${i+1}</td><td>${x.team}</td><td>${x.p}</td><td>${x.w}</td><td>${x.d}</td><td>${x.l}</td><td>${x.gf}</td><td>${x.ga}</td><td>${x.gf-x.ga}</td><td><b>${x.pts}</b></td></tr>`).join('')}</table></section>`}
+function tables(){document.getElementById('app').innerHTML='<h2>📊 League Tables</h2><div class="grid">'+fullTable(S.t1,"🥇 A-League")+fullTable(S.t2,"🥈 Australian Championship")+Object.entries(S.npl).map(([k,l])=>fullTable(l,"🥉 NPL "+k)).join('')+'</div>'}
+function fixtures(){let r=Math.min(S.round,34),g=S.t1.fix[r-1]||[];document.getElementById('app').innerHTML=`<section class="card"><h2>📅 Round ${r} Fixtures</h2><div class="muted">Simulate the round from Home.</div>${g.map(([a,b])=>`<div class="fixture"><span>${a}<br><b>vs</b><br>${b}</span><span class="score">—</span></div>`).join('')}</section>`}
+function club(){let l=S.t1.table[S.selected]||S.t2.table[S.selected];let team=S.selected;if(!l){let found=all().find(x=>x===team);team=found||DATA.tier1[0];l=S.t1.table[team]||S.t2.table[team]}document.getElementById('app').innerHTML=`
+<section class="card hero"><div class="muted">MY CLUB</div><h2>${S.selected}</h2><div class="actions"><select onchange="selectClub(this.value)">${all().map(x=>`<option ${x===S.selected?'selected':''}>${x}</option>`).join('')}</select></div>
+<div class="grid"><div><div class="muted">League position</div><div class="stat">${position(S.selected)}</div></div><div><div class="muted">Form</div><div class="stat">${Math.round(S.form[S.selected])}</div></div><div><div class="muted">Transfer budget</div><div class="stat">$${S.budget}m</div></div></div></section>
+<section class="card" style="margin-top:12px"><h3>🧠 Club actions</h3><div class="actions"><button onclick="boost()">💪 Training boost</button><button onclick="scout()">🔎 Scout player</button><button onclick="buy()">💰 Make transfer</button></div><div id="clubmsg" class="muted">Use actions to create your own story.</div></section>`}
+function selectClub(v){S.selected=v;save();page('club')}
+function position(team){for(let l of [S.t1,S.t2,...Object.values(S.npl)]){let i=table(l).findIndex(x=>x.team===team);if(i>=0)return i+1}return'—'}
+function boost(){S.form[S.selected]=Math.min(90,S.form[S.selected]+3);S.logs.unshift(`TRAINING: ${S.selected} worked hard and gained form.`);save();page('club')}
+function scout(){let p=["young midfielder","fast winger","ball-playing defender","goalkeeper","striker"];S.logs.unshift(`SCOUTING: ${S.selected} found an interesting ${rnd(p)}.`);save();page('club')}
+function buy(){if(S.budget<3){alert("Not enough budget.");return}S.budget-=3;S.form[S.selected]=Math.min(90,S.form[S.selected]+2);S.logs.unshift(`TRANSFER: ${S.selected} completed a $3m signing.`);save();page('club')}
+function news(){document.getElementById('app').innerHTML=`<h2>📰 Football News</h2><section class="card">${S.logs.map(x=>`<div class="news">${x}</div>`).join('')||'<div class="muted">No news yet.</div>'}</section>`}
+function makeCup(){let a=all().sort(()=>Math.random()-.5),games=[];while(a.length>1){let round=[];for(let i=0;i<a.length;i+=2)round.push([a[i],a[i+1]||'BYE']);games.push(round);a=round.map(g=>g[1]==='BYE'?g[0]:g[0]);if(a.length===1)break}return games}
+function cup(){if(!S.cup)S.cup=makeCup();let names=["Round of 128","Round of 64","Round of 32","Round of 16","Quarter-finals","Semi-finals","Final"];document.getElementById('app').innerHTML=`<section class="card"><h2>🏆 Australia Cup</h2><p class="muted">Open draw. Any club can meet any other club.</p><button class="primary" onclick="newCup()">🎲 New Draw</button></section><div class="grid" style="margin-top:12px">${S.cup.map((r,i)=>`<section class="card"><h3>${names[i]||'Round '+(i+1)}</h3>${r.map(g=>`<div class="fixture"><span>${g[0]}<br>vs<br>${g[1]}</span><span class="score">—</span></div>`).join('')}</section>`).join('')}</div>`}
+function newCup(){S.cup=makeCup();save();page('cup')}
+function season(){let a=table(S.t1),b=table(S.t2);document.getElementById('app').innerHTML=`<section class="card"><h2>📈 Season & Promotion/Relegation</h2><p class="muted">Finish Round 34, then use these positions to decide movement between tiers.</p>
+<div class="grid"><div class="card"><h3>Tier 1</h3><p>🏆 Champion: <b>${a[0]?.team||'—'}</b></p><p class="up">🔺 Incoming: ${b.slice(0,3).map(x=>x.team).join(', ')}</p><p class="down">🔻 Relegated: ${a.slice(16).map(x=>x.team).join(', ')}</p><p>⚠️ Relegation playoff: ${a[15]?.team||'—'}</p></div><div class="card"><h3>Tier 2</h3><p>🔺 Auto promotion: ${b.slice(0,2).map(x=>x.team).join(', ')}</p><p>🔥 Promotion playoff: ${b.slice(2,6).map(x=>x.team).join(', ')}</p><p class="down">🔻 Relegated: ${b.slice(16).map(x=>x.team).join(', ')}</p></div></div></section>`}
+function page(x){if(x==='home')home();if(x==='club')club();if(x==='table')tables();if(x==='fixtures')fixtures();if(x==='cup')cup();if(x==='news')news()}
+page('home');
+</script></body></html>
