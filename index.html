@@ -350,123 +350,145 @@ if(!S.market.length)refreshMarket();page('home');
 <script src="v6_pre_batch3_fixes.js"></script>
 
 <script>
-/* COMBINED SCOUT TRANSFER FIX */
+/* V6 BATCH 2.1 — SCOUT NEGOTIATIONS FINAL UI FIX
+   Scout-only. Uses S.scoutOffers so it cannot interfere with Club Transfers,
+   listings, incoming club bids, or season restart snapshots. */
 (function(){
+  'use strict';
+  function saveScout(){ if(typeof save==='function') save(); }
+  function fmt(n){ return typeof money==='function' ? money(Number(n)) : '$'+Number(n).toFixed(1)+'m'; }
+  function budget(){ return Number((typeof clubMoney==='function'?clubMoney(S.selected):S.finance[S.selected]).budget||0); }
+  function offers(){ S.scoutOffers=Array.isArray(S.scoutOffers)?S.scoutOffers:[]; return S.scoutOffers; }
+
+  function finishScout(o){
+    const p=(S.market||[]).find(x=>x.id===o.playerId)||(S.worldPool||[]).find(x=>x.id===o.playerId);
+    if(!p || p.club!=='World Pool'){ alert('This player is no longer available.'); return false; }
+    S.players[S.selected]=S.players[S.selected]||[];
+    if(S.players[S.selected].some(x=>x.id===p.id||x.name===p.name)){ alert('Transfer blocked: duplicate player detected.'); return false; }
+    if(Number(o.amount)>budget()){ alert('That exceeds your transfer budget.'); return false; }
+    p.club=S.selected;
+    S.players[S.selected].push(p);
+    S.market=(S.market||[]).filter(x=>x.id!==p.id);
+    S.worldPool=(S.worldPool||[]).filter(x=>x.id!==p.id);
+    clubMoney(S.selected).budget=Math.max(0,budget()-Number(o.amount));
+    S.logs.unshift('TRANSFER COMPLETE: '+p.name+' joined '+S.selected+' for '+fmt(o.amount)+'.');
+    S.scoutOffers=offers().filter(x=>x.id!==o.id);
+    saveScout();
+    alert('Deal accepted! '+p.name+' joined '+S.selected+' for '+fmt(o.amount)+'.');
+    return true;
+  }
+
   window.makeOffer=function(id){
-    const p=S.market.find(x=>x.id===id);
-    if(!p)return;
+    const p=(S.market||[]).find(x=>x.id===id); if(!p)return;
     const asking=Number(p.asking||p.value||0);
-    const raw=prompt('Offer for '+p.name+' — asking '+money(asking),asking.toFixed(1));
+    const raw=prompt('Offer for '+p.name+' — asking '+fmt(asking),asking.toFixed(1));
     if(raw===null)return;
     const amount=Number(raw);
-    if(!amount||amount<=0)return alert('Enter a valid offer.');
-    if(amount>clubMoney(S.selected).budget)return alert('That exceeds your transfer budget.');
-    if(p.club!=='World Pool'){
-      alert('This player is no longer available.');
-      refreshMarket();page('market');return;
-    }
-    const chance=amount>=asking*1.12?0.90:amount>=asking?0.72:0.35;
+    if(!Number.isFinite(amount)||amount<=0){alert('Enter a valid offer.');return;}
+    if(amount>budget()){alert('That exceeds your transfer budget.');return;}
+    if(p.club!=='World Pool'){alert('This player is no longer available.');return;}
+
+    /* Much stricter AI acceptance: a very low offer can NEVER be accepted.
+       The higher the offer relative to asking, the more likely acceptance. */
+    const ratio=amount/asking;
+    let chance;
+    if(ratio<0.75) chance=0;
+    else if(ratio<0.85) chance=0.05;
+    else if(ratio<0.90) chance=0.15;
+    else if(ratio<0.95) chance=0.30;
+    else if(ratio<1.00) chance=0.50;
+    else if(ratio<1.05) chance=0.78;
+    else if(ratio<1.15) chance=0.90;
+    else chance=0.97;
+
     if(Math.random()<chance){
-      if(completeScoutTransfer(p,S.selected,amount))
-        alert('Deal accepted! '+p.name+' joined '+S.selected+'.');
+      const o={id:uid(),playerId:p.id,player:p.name,amount,asking,
+        originalAsking:asking,previousOffer:amount,kind:'scout',status:'accepted'};
+      offers().push(o); saveScout(); finishScout(o); page('market'); return;
+    }
+
+    /* AI counter always makes sense relative to the actual offer.
+       It cannot counter LOWER than the user's offer. */
+    let counter;
+    if(amount>=asking){
+      counter=amount*(1.02+Math.random()*0.05);
     }else{
-      const counter=+(asking*(1.05+Math.random()*.18)).toFixed(1);
-      S.offers=S.offers||[];
-      S.offers.push({id:uid(),player:p.name,playerId:p.id,from:p.club,
-        to:S.selected,amount:counter,kind:'scout',status:'countered',created:Date.now()});
-      S.logs.unshift('SCOUT NEGOTIATION: '+p.name+' countered with '+money(counter)+'.');
-      alert('Counter-offer: '+money(counter));
+      counter=Math.max(amount+0.1, asking*(0.98+Math.random()*0.08));
     }
-    save();page('market');
+    counter=+counter.toFixed(1);
+    counter=Math.max(counter,amount);
+
+    offers().push({id:uid(),playerId:p.id,player:p.name,amount:counter,
+      asking,originalAsking:asking,previousOffer:amount,kind:'scout',status:'countered'});
+    S.logs.unshift('SCOUT NEGOTIATION: '+p.name+' countered with '+fmt(counter)+'.');
+    saveScout();
+    alert('Counter-offer: '+fmt(counter));
+    page('market');
   };
 
-  window.completeScoutTransfer=function(p,buyer,amount){
-    if(!p||p.club!=='World Pool')return false;
-    S.players[buyer]=S.players[buyer]||[];
-    if(S.players[buyer].some(x=>x.id===p.id||x.name===p.name))return false;
-    p.club=buyer;
-    S.players[buyer].push(p);
-    S.market=S.market.filter(x=>x.id!==p.id);
-    S.worldPool=S.worldPool.filter(x=>x.id!==p.id);
-    clubMoney(buyer).budget=Math.max(0,clubMoney(buyer).budget-amount);
-    clubMoney(buyer).balance=Math.max(0,clubMoney(buyer).balance-amount*.25);
-    S.logs.unshift('TRANSFER COMPLETE: '+p.name+' joined '+buyer+' for '+money(amount)+'.');
-    return true;
+  window.scoutAccept=function(id){
+    const o=offers().find(x=>x.id===id); if(!o)return;
+    finishScout(o); page('market');
   };
 
-  window.acceptScoutOffer=function(oid){
-    const o=(S.offers||[]).find(x=>x.id===oid&&x.kind==='scout');
-    if(!o)return;
-    if(Number(o.amount)>Number(clubMoney(S.selected).budget))
-      return alert('That exceeds your transfer budget.');
-    const p=S.market.find(x=>x.id===o.playerId)||S.worldPool.find(x=>x.id===o.playerId);
-    if(!p||p.club!=='World Pool'){
-      S.offers=S.offers.filter(x=>x.id!==oid);save();page('market');return;
-    }
-    if(completeScoutTransfer(p,S.selected,Number(o.amount))){
-      S.offers=S.offers.filter(x=>x.id!==oid);
-      alert('Deal accepted! '+p.name+' joined '+S.selected+'.');
-    }
-    save();page('market');
+  window.scoutReject=function(id){
+    const o=offers().find(x=>x.id===id); if(!o)return;
+    S.scoutOffers=offers().filter(x=>x.id!==id);
+    S.logs.unshift('SCOUT NEGOTIATION: '+o.player+' rejected.');
+    saveScout(); page('market');
   };
 
-  window.counterScoutOffer=function(oid){
-    const o=(S.offers||[]).find(x=>x.id===oid&&x.kind==='scout');
-    if(!o)return;
-    const v=Number(prompt('Ask for how much?',Number(o.amount*1.10).toFixed(1)));
-    if(!v||v<=o.amount)return;
-    if(v>Number(clubMoney(S.selected).budget))
-      return alert('That exceeds your transfer budget.');
-    o.amount=+v.toFixed(1);
+  window.scoutCounter=function(id){
+    const o=offers().find(x=>x.id===id); if(!o)return;
+    const current=Number(o.amount), asking=Number(o.asking||current);
+    const raw=prompt('Counter-offer for '+o.player+'\nTheir current price: '+fmt(current)+'\nAsking price: '+fmt(asking),current.toFixed(1));
+    if(raw===null)return;
+    const counter=Number(raw);
+    if(!Number.isFinite(counter)||counter<=current){alert('Your counter must be higher than their current price.');return;}
+    if(counter>budget()){alert('That exceeds your transfer budget.');return;}
+
+    /* If your counter meets the asking price, the club has a strong chance
+       to accept. Otherwise it returns a price between its current counter
+       and your proposal — never a nonsensical lower number. */
+    if(counter>=asking && Math.random()<0.75){
+      o.amount=counter; o.status='accepted'; saveScout(); finishScout(o); page('market'); return;
+    }
+    const gap=counter-current;
+    let response=current + gap*(0.35+Math.random()*0.25);
+    response=Math.max(current,Math.min(counter,response));
+    o.previousOffer=counter;
+    o.amount=+response.toFixed(1);
     o.status='countered';
-    S.logs.unshift('SCOUT COUNTER: '+S.selected+' countered for '+money(o.amount)+' on '+o.player+'.');
-    save();page('market');
+    S.logs.unshift('SCOUT NEGOTIATION: '+o.player+' countered with '+fmt(o.amount)+'.');
+    saveScout(); alert('They countered with '+fmt(o.amount)+'.'); page('market');
   };
 
-  window.rejectScoutOffer=function(oid){
-    const o=(S.offers||[]).find(x=>x.id===oid&&x.kind==='scout');
-    if(!o)return;
-    S.offers=S.offers.filter(x=>x.id!==oid);
-    S.logs.unshift('SCOUT NEGOTIATION: counter-offer for '+o.player+' rejected.');
-    save();page('market');
-  };
-
-  window.scoutIncomingOffers=function(){
-    const list=(S.offers||[]).filter(o=>o.kind==='scout'&&o.to===S.selected);
+  function scoutUI(){
+    const list=offers().filter(o=>o.status==='countered'||o.status==='pending');
     if(!list.length)return '<p class="muted">No Scout negotiations waiting.</p>';
     return list.map(o=>'<div class="player"><div><b>'+esc(o.player)+'</b><br>'+
-      '<span class="muted">🌍 Scout counter-offer: '+money(o.amount)+'</span></div>'+
-      '<div class="actions"><button class="primary" onclick="acceptScoutOffer(\''+o.id+'\')">Accept</button>'+
-      '<button onclick="counterScoutOffer(\''+o.id+'\')">Ask More</button>'+
-      '<button class="danger" onclick="rejectScoutOffer(\''+o.id+'\')">Reject</button></div></div>').join('');
-  };
+      '<span class="muted">Their current price: '+fmt(o.amount)+'</span><br>'+
+      '<span class="muted">Original asking: '+fmt(o.asking)+'</span></div>'+\
+      '<div class="actions">'+
+      '<button class="primary" onclick="scoutAccept(\''+o.id+'\')">Accept</button>'+\
+      '<button onclick="scoutCounter(\''+o.id+'\')">Counter</button>'+\
+      '<button class="danger" onclick="scoutReject(\''+o.id+'\')">Reject</button>'+\
+      '</div></div>').join('');
+  }
 
-  window.market=function(){
-    if(typeof generateIncomingBids==='function')generateIncomingBids(false);
-    document.getElementById('app').innerHTML=
-      '<section class="card"><h2>🌍 Global Transfer Market</h2>'+
-      '<div class="grid"><div><h3>Rarity chances</h3>'+
-      WORLD_RARITIES.map(r=>'<div class="fixture"><span><span class="rarity '+rarityClass(r.name)+'">'+r.name+'</span></span><b>'+r.chance+'%</b></div>').join('')+
-      '</div><div><h3>How it works</h3><p class="muted">Scout worldwide players, negotiate offers and buy players. Listed players and Club Transfers stay separate.</p>'+
-      '<div class="actions"><button class="primary" onclick="refreshMarket();page(\'market\')">🔎 Scout World</button>'+
-      '<button onclick="page(\'squad\')">📋 Manage Listings</button></div></div></div></section>'+
-      '<section class="card"><h3>🌐 Available players</h3>'+
-      '<input id="q" placeholder="Search name / position / rarity" oninput="renderMarket()"><div id="ml"></div></section>'+
-      '<section class="card"><h3>🤝 Scout Negotiations</h3>'+scoutIncomingOffers()+'</section>'+
-      '<section class="card"><h3>📨 Club Transfer Bids</h3>'+
-      (typeof incomingOffersV621==='function'?incomingOffersV621():'<p class="muted">No incoming club bids.</p>')+
-      '</section>';
-    renderMarket();save();
-  };
-
-  const oldRenderMarket=window.renderMarket;
-  window.renderMarket=function(){
-    if(typeof oldRenderMarket==='function')oldRenderMarket();
-    document.querySelectorAll('#ml button').forEach(b=>{
-      if((b.textContent||'').trim()==='Offer')b.textContent='Offer / Buy';
-    });
-  };
+  const oldMarket=window.market;
+  if(typeof oldMarket==='function'){
+    window.market=function(){
+      oldMarket();
+      const app=document.getElementById('app'); if(!app)return;
+      const old=app.querySelector('#v621-scout-negotiations');
+      if(old)old.remove();
+      const card=document.createElement('section');
+      card.className='card'; card.id='v621-scout-negotiations';
+      card.innerHTML='<h3>🤝 Scout Negotiations</h3>'+scoutUI();
+      app.appendChild(card);
+    };
+  }
 })();
 </script>
-
 </body></html>
