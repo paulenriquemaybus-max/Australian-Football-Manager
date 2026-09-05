@@ -365,7 +365,16 @@ if(!S.market.length)refreshMarket();page('home');
       alert('This player is no longer available.');
       refreshMarket();page('market');return;
     }
-    const chance=amount>=asking*1.12?0.90:amount>=asking?0.72:0.35;
+    const ratio=amount/asking;
+    let chance=0;
+    if(ratio<0.75) chance=0;
+    else if(ratio<0.85) chance=0.05;
+    else if(ratio<0.90) chance=0.15;
+    else if(ratio<0.95) chance=0.30;
+    else if(ratio<1.00) chance=0.50;
+    else if(ratio<1.05) chance=0.78;
+    else if(ratio<1.15) chance=0.90;
+    else chance=0.97;
     if(Math.random()<chance){
       if(completeScoutTransfer(p,S.selected,amount))
         alert('Deal accepted! '+p.name+' joined '+S.selected+'.');
@@ -413,14 +422,54 @@ if(!S.market.length)refreshMarket();page('home');
   window.counterScoutOffer=function(oid){
     const o=(S.offers||[]).find(x=>x.id===oid&&x.kind==='scout');
     if(!o)return;
-    const v=Number(prompt('Ask for how much?',Number(o.amount*1.10).toFixed(1)));
-    if(!v||v<=o.amount)return;
+    const p=S.market.find(x=>x.id===o.playerId)||S.worldPool.find(x=>x.id===o.playerId);
+    if(!p||p.club!=='World Pool'){
+      S.offers=S.offers.filter(x=>x.id!==oid);save();page('market');return;
+    }
+    const asking=Number(p.asking||p.value||o.amount||0);
+    const v=Number(prompt('Your counter-offer for '+p.name+' (asking '+money(asking)+'):',Number(o.amount*0.95).toFixed(1)));
+    if(!v||v<=0)return;
     if(v>Number(clubMoney(S.selected).budget))
       return alert('That exceeds your transfer budget.');
-    o.amount=+v.toFixed(1);
+
+    // The user is the buyer, so Counter negotiates the price.
     o.status='countered';
-    S.logs.unshift('SCOUT COUNTER: '+S.selected+' countered for '+money(o.amount)+' on '+o.player+'.');
-    save();page('market');
+    const ratio=v/asking;
+    let acceptChance=0;
+    if(ratio<0.75) acceptChance=0;
+    else if(ratio<0.85) acceptChance=0.10;
+    else if(ratio<0.90) acceptChance=0.25;
+    else if(ratio<0.95) acceptChance=0.45;
+    else if(ratio<1.00) acceptChance=0.65;
+    else if(ratio<1.05) acceptChance=0.88;
+    else acceptChance=0.97;
+
+    S.logs.unshift('SCOUT COUNTER: '+S.selected+' offered '+money(v)+' for '+p.name+'.');
+
+    if(Math.random()<acceptChance){
+      o.amount=+v.toFixed(1);
+      if(completeScoutTransfer(p,S.selected,o.amount)){
+        S.offers=S.offers.filter(x=>x.id!==oid);
+        save();
+        alert('Scout accepted your counter-offer of '+money(o.amount)+' for '+p.name+'.');
+        page('market');
+        return;
+      }
+    }
+
+    // The AI's revised price can never be below the user's counter.
+    const floor=v;
+    const ceiling=Math.max(v,asking);
+    let revised=ceiling===floor
+      ? +(v*1.02).toFixed(1)
+      : +(floor+(ceiling-floor)*0.55).toFixed(1);
+    revised=Math.max(revised,v);
+    o.amount=revised;
+    o.status='countered';
+    S.logs.unshift('SCOUT NEGOTIATION: '+p.name+' countered back with '+money(revised)+'.');
+    save();
+    alert('Scout countered back with '+money(revised)+'.');
+    page('market');
   };
 
   window.rejectScoutOffer=function(oid){
@@ -437,7 +486,7 @@ if(!S.market.length)refreshMarket();page('home');
     return list.map(o=>'<div class="player"><div><b>'+esc(o.player)+'</b><br>'+
       '<span class="muted">🌍 Scout counter-offer: '+money(o.amount)+'</span></div>'+
       '<div class="actions"><button class="primary" onclick="acceptScoutOffer(\''+o.id+'\')">Accept</button>'+
-      '<button onclick="counterScoutOffer(\''+o.id+'\')">Ask More</button>'+
+      '<button onclick="counterScoutOffer(\''+o.id+'\')">Counter</button>'+
       '<button class="danger" onclick="rejectScoutOffer(\''+o.id+'\')">Reject</button></div></div>').join('');
   };
 
