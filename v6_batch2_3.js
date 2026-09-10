@@ -23,7 +23,8 @@
   }
 
   let added=0;
-  DATA.tier1.forEach(club=>{
+  const allTeams23=[...DATA.tier1,...DATA.tier2,...Object.values(DATA.npl||{}).flat()];
+  allTeams23.forEach(club=>{
     S.players[club]=Array.isArray(S.players[club])?S.players[club]:[];
     while(S.players[club].length<18){
       S.players[club].push(makeFiller(club,S.players[club].length));
@@ -34,6 +35,7 @@
   S.b23=S.b23||{};
   S.b23.version=2.3;
   S.b23.minimumSquadSize=18;
+  S.b23.allClubsCovered=true;
   S.b23.added=added;
   if(added){
     S.logs=S.logs||[];

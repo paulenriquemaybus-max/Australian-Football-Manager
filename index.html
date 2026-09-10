@@ -169,7 +169,28 @@ function table(l,n=18){return'<table><tr><th>#</th><th>Club</th><th>P</th><th>W<
 function posn(c){let[,l]=findLeague(c);return l?(standings(l).findIndex(x=>x.team===c)+1):'-'}
 function home(){let leader=standings(S.t1)[0];document.getElementById('app').innerHTML='<section class="card"><div class="muted">SEASON '+S.season+'/'+(S.season+1)+' • ROUND '+Math.min(34,S.round-1)+'/34</div><h2>'+esc(S.selected)+'</h2><div class="actions"><button class="primary" onclick="simRound()">⚡ Simulate Next Round</button><button onclick="for(let i=0;i<5&&S.round<=34;i++)simRound()">⏩ 5 Rounds</button><button onclick="restartSeason()">🔄 Restart This Season</button></div><div class="grid"><div class="card"><div class="muted">A-League leader</div><div class="stat">'+esc(leader.team)+'</div><div>'+leader.pts+' pts</div></div><div class="card"><div class="muted">Your position</div><div class="stat">'+posn(S.selected)+'</div><div>Form '+Math.round(S.form[S.selected])+'</div></div><div class="card"><div class="muted">Club finances</div><div class="stat">'+money(clubMoney(S.selected).balance)+'</div><div>Transfer budget '+money(clubMoney(S.selected).budget)+'</div></div></div></section><div class="grid"><section class="card"><h3>🥇 A-League</h3>'+table(S.t1,6)+'</section><section class="card"><h3>📰 Latest</h3>'+S.logs.slice(0,10).map(x=>'<div class="news">'+esc(x)+'</div>').join('')+'</section></div>'}
 function club(){document.getElementById('app').innerHTML='<section class="card"><h2>⭐ Club</h2><select onchange="S.selected=this.value;save();page(\'club\')">'+allTeams().map(c=>'<option '+(c===S.selected?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select><div class="grid" style="margin-top:12px"><div class="card"><div class="muted">Position</div><div class="stat">'+posn(S.selected)+'</div></div><div class="card"><div class="muted">Balance</div><div class="stat">'+money(clubMoney(S.selected).balance)+'</div></div><div class="card"><div class="muted">Transfer budget</div><div class="stat">'+money(clubMoney(S.selected).budget)+'</div></div></div></section>'}
+function ensureSquadDepthV23(){
+ let added=0;
+ const all=allTeams();
+ const used=new Set(all.flatMap(c=>(S.players[c]||[]).map(p=>String(p.name))));
+ const pos=['GK','CB','CB','LB','RB','CM','CM','CAM','LM','RM','LW','RW','ST','ST','CDM','CB','CM','ST'];
+ all.forEach(club=>{
+  S.players[club]=Array.isArray(S.players[club])?S.players[club]:[];
+  while(S.players[club].length<18){
+   let name=club+' Squad Player '+(S.players[club].length+1);
+   let n=2,base=name;
+   while(used.has(name)){name=base+' '+n++;}
+   const ov=58+Math.floor(Math.random()*13);
+   S.players[club].push(player(name,pos[(S.players[club].length)%pos.length],18+Math.floor(Math.random()*13),ov,club,rarityForOVR(ov)));
+   used.add(name); added++;
+  }
+ });
+ if(added) save();
+ return added;
+}
+
 function squad(){
+ ensureSquadDepthV23();
  let ps=S.players[S.selected]||[];
  let listed=S.listedPlayers||[];
  document.getElementById('app').innerHTML='<section class="card"><h2>👥 Squad — '+esc(S.selected)+'</h2>'+
@@ -285,6 +306,7 @@ function best11(){
  return out
 }
 function lineup(){
+ ensureSquadDepthV23();
  let club=S.selected,ps=S.players[club]||[],ids=S.lineups[club]||[];
  document.getElementById('app').innerHTML='<section class="card"><h2>🧠 Lineup Builder</h2><p class="muted">Build your own XI or let Best XI choose the strongest balanced lineup automatically.</p><div class="actions"><button class="primary" onclick="autoLineup()">🤖 Best XI</button><button onclick="clearLineup()">🧹 Clear</button><button onclick="saveLineup()">💾 Save XI</button></div><div class="lineup">'+Array.from({length:11},(_,i)=>{let p=ps.find(x=>x.id===ids[i]);return '<div class="slot"><b>Slot '+(i+1)+'</b><br>'+ (p?esc(p.name)+'<br><span class="small">'+p.pos+' • '+p.ov+'</span>':'Empty')+'<br><select onchange="setSlot('+i+',this.value)"><option value="">Choose...</option>'+ps.map(x=>'<option value="'+x.id+'" '+(p&&p.id===x.id?'selected':'')+'>'+esc(x.name)+' — '+x.pos+' '+x.ov+'</option>').join('')+'</select></div>'}).join('')+'</div></section><section class="card"><h3>Current XI</h3>'+ids.map((id,i)=>{let p=ps.find(x=>x.id===id);return p?'<div class="fixture"><span>'+(i+1)+'. '+esc(p.name)+'</span><span>'+p.pos+' • OVR '+p.ov+'</span></div>':''}).join('')+'</section>'
 }
@@ -350,6 +372,7 @@ if(!S.market.length)refreshMarket();page('home');
 <script src="v6_pre_batch3_fixes.js"></script>
 <script src="v6_batch2_2.js"></script>
 <script src="v6_batch2_3.js"></script>
+<script>ensureSquadDepthV23();</script>
 
 <script>
 /* COMBINED SCOUT TRANSFER FIX */
