@@ -177,9 +177,12 @@ function ensureSquadDepthV23(){
  all.forEach(club=>{
   S.players[club]=Array.isArray(S.players[club])?S.players[club]:[];
   while(S.players[club].length<18){
-   let name=club+' Squad Player '+(S.players[club].length+1);
-   let n=2,base=name;
-   while(used.has(name)){name=base+' '+n++;}
+   let name;
+   if(typeof nextRealisticName==='function') name=nextRealisticName();
+   else {
+    name='Academy Player '+Math.random().toString(36).slice(2,8);
+    while(used.has(name)) name='Academy Player '+Math.random().toString(36).slice(2,8);
+   }
    const ov=58+Math.floor(Math.random()*13);
    S.players[club].push(player(name,pos[(S.players[club].length)%pos.length],18+Math.floor(Math.random()*13),ov,club,rarityForOVR(ov)));
    used.add(name); added++;
