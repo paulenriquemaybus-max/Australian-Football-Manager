@@ -170,28 +170,47 @@ function posn(c){let[,l]=findLeague(c);return l?(standings(l).findIndex(x=>x.tea
 function home(){let leader=standings(S.t1)[0];document.getElementById('app').innerHTML='<section class="card"><div class="muted">SEASON '+S.season+'/'+(S.season+1)+' • ROUND '+Math.min(34,S.round-1)+'/34</div><h2>'+esc(S.selected)+'</h2><div class="actions"><button class="primary" onclick="simRound()">⚡ Simulate Next Round</button><button onclick="for(let i=0;i<5&&S.round<=34;i++)simRound()">⏩ 5 Rounds</button><button onclick="restartSeason()">🔄 Restart This Season</button></div><div class="grid"><div class="card"><div class="muted">A-League leader</div><div class="stat">'+esc(leader.team)+'</div><div>'+leader.pts+' pts</div></div><div class="card"><div class="muted">Your position</div><div class="stat">'+posn(S.selected)+'</div><div>Form '+Math.round(S.form[S.selected])+'</div></div><div class="card"><div class="muted">Club finances</div><div class="stat">'+money(clubMoney(S.selected).balance)+'</div><div>Transfer budget '+money(clubMoney(S.selected).budget)+'</div></div></div></section><div class="grid"><section class="card"><h3>🥇 A-League</h3>'+table(S.t1,6)+'</section><section class="card"><h3>📰 Latest</h3>'+S.logs.slice(0,10).map(x=>'<div class="news">'+esc(x)+'</div>').join('')+'</section></div>'}
 function club(){document.getElementById('app').innerHTML='<section class="card"><h2>⭐ Club</h2><select onchange="S.selected=this.value;save();page(\'club\')">'+allTeams().map(c=>'<option '+(c===S.selected?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select><div class="grid" style="margin-top:12px"><div class="card"><div class="muted">Position</div><div class="stat">'+posn(S.selected)+'</div></div><div class="card"><div class="muted">Balance</div><div class="stat">'+money(clubMoney(S.selected).balance)+'</div></div><div class="card"><div class="muted">Transfer budget</div><div class="stat">'+money(clubMoney(S.selected).budget)+'</div></div></div></section>'}
 function ensureSquadDepthV23(){
- let added=0;
+ let changed=0,added=0;
  const all=allTeams();
- const used=new Set(all.flatMap(c=>(S.players[c]||[]).map(p=>String(p.name))));
- const pos=['GK','CB','CB','LB','RB','CM','CM','CAM','LM','RM','LW','RW','ST','ST','CDM','CB','CM','ST'];
+ const first=['Liam','Noah','Ethan','Lucas','Jack','Oliver','Leo','Mason','Charlie','Henry','Oscar','Cooper','Max','James','Thomas','William','Samuel','Harry','Alexander','Benjamin','Daniel','Jacob','Joshua','Ryan','Nathan','Dylan','Caleb','Isaac','Lachlan','Kai','Jordan','Aiden','Finn','Riley','Zac','Bailey','Connor','Cameron','Blake','Jesse','Tyler','Logan','Aaron','Callum','Mitch','Toby','Adam','Rhys','Ben','Jayden','Kieran','Declan','Patrick','Xavier','Angus','Hamish','Flynn','Hudson','Ashton','Jaxon','Nate','Arlo','Myles','Eli','Joel','Owen','Harrison','Jackson','Cody','Archie','Jett','Kobe','Reece','Hayden','Kye','Stefan','Luca','Nico','Marco','Mateo','Rafael','Emilio','Javier','Diego','Milan','Luka','Nikola','Ivan','Yuki','Ren','Hiro','Daiki','Kenji'];
+ const last=['Carter','Williams','Brooks','Martin','Wilson','Hayes','Mitchell','Taylor','Bennett','Collins','Murphy','Davis','Sullivan','Anderson','Walker','Harris','Clarke','Cooper','Scott','Moore','Evans','Turner','Wright','Edwards','Hughes','Roberts','Morris','Stewart','Murray','Thompson','Campbell','Fraser','McKenzie','Johnson','Morgan','King','Walsh','Reid','Foster','Parker','Green','Price','Bell','Young','Graham','Richardson','Kelly','McDonald','Baker','Brown','Dawson','Fletcher','Griffiths','Hamilton','Henderson','Johnston','Lawson','Marshall','Mason','Miller','Nelson','Patterson','Pearson','Phillips','Reynolds','Richards','Robinson','Ross','Russell','Sanders','Simmons','Spencer','Stevens','Sutherland','Wallace','Watson','Webb','West','Woods'];
+ const used=new Set(all.flatMap(c=>(S.players[c]||[]).map(p=>String(p.name||''))));
+ const rnd=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+ const makeName=(firstName,local)=>{
+  const ls=rnd(last);
+  for(const l of ls){const n=firstName+' '+l;if(!used.has(n)){used.add(n);local.add(n);return n}}
+  let n=2,name=firstName+' '+ls[0]+' '+n;while(used.has(name))name=firstName+' '+ls[0]+' '+(++n);used.add(name);local.add(name);return name;
+ };
  all.forEach(club=>{
   S.players[club]=Array.isArray(S.players[club])?S.players[club]:[];
+  const depth=S.players[club].filter(p=>p&&p.b23Depth);
+  // One-time migration: give existing depth players different random first names within each club.
+  if(!S.b23||!S.b23.randomFirstNamesFixed){
+   const local=new Set();
+   const fs=rnd(first);
+   depth.forEach((p,i)=>{
+    used.delete(String(p.name||''));
+    p.name=makeName(fs[i%fs.length],local); changed++;
+   });
+  }
   while(S.players[club].length<18){
-   let name;
-   if(typeof nextRealisticName==='function') name=nextRealisticName();
-   else {
-    name='Academy Player '+Math.random().toString(36).slice(2,8);
-    while(used.has(name)) name='Academy Player '+Math.random().toString(36).slice(2,8);
-   }
-   const ov=58+Math.floor(Math.random()*13);
-   S.players[club].push(player(name,pos[(S.players[club].length)%pos.length],18+Math.floor(Math.random()*13),ov,club,rarityForOVR(ov)));
-   used.add(name); added++;
+   const local=new Set(S.players[club].map(p=>String(p.name||'')));
+   const available=first.filter(f=>![...local].some(n=>n.split(' ')[0]===f));
+   const f=(available.length?available:first)[Math.floor(Math.random()*(available.length?available.length:first.length))];
+   const name=makeName(f,local),ov=58+Math.floor(Math.random()*13);
+   S.players[club].push(player(name,['GK','CB','CB','LB','RB','CM','CM','CAM','LM','RM','LW','RW','ST','ST','CDM','CB','CM','ST'][S.players[club].length%18],18+Math.floor(Math.random()*13),ov,club,rarityForOVR(ov)));
+   S.players[club][S.players[club].length-1].b23Depth=true; added++;
   }
  });
- if(added) save();
- return added;
+ S.b23=S.b23||{};
+ S.b23.minimumSquadSize=18;
+ S.b23.allClubsCovered=true;
+ S.b23.randomFirstNamesFixed=true;
+ S.b23.renamed=(S.b23.renamed||0)+changed;
+ S.b23.added=(S.b23.added||0)+added;
+ if(changed||added){S.logs=S.logs||[];S.logs.unshift('BATCH 2.3: Randomised depth-player first names and ensured every club has at least 18 players.');save()}
+ return changed+added;
 }
-
 function squad(){
  ensureSquadDepthV23();
  let ps=S.players[S.selected]||[];
